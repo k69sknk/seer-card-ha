@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Seer",
+        "description": "Enter your Seer instance URL and API key.\nYou can find the API key in Seer → Settings → General.",
+        "data": {
+          "seer_url": "Seer URL",
+          "seer_api_key": "API Key"
+        },
+        "data_description": {
+          "seer_url": "Example: http://192.168.1.168:5055",
+          "seer_api_key": "Your Seer API key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Seer. Check the URL.",
+      "invalid_auth": "Invalid API key.",
+      "unknown": "Unknown error."
+    },
+    "abort": {
+      "already_configured": "Seer is already configured."
+    }
+  }
+}

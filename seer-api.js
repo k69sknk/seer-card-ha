@@ -1,49 +1,45 @@
-// seer-api.js - Seer API Client for Home Assistant Custom Card
+// seer-api.js - Seer API Client — proxies all calls via HA WebSocket (no CORS)
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
 export class SeerApi {
-  constructor(baseUrl, apiKey) {
-    this.baseUrl = baseUrl.replace(/\/+$/, '');
-    this.apiKey = apiKey;
+  constructor(hass) {
+    this._hass = hass;
     this._cache = new Map();
-    this._cacheTimeout = 60000; // 1 minute cache
+    this._cacheTimeout = 60000; // 1 minute
   }
 
-  async _fetch(endpoint, options = {}) {
-    const url = `${this.baseUrl}/api/v1${endpoint}`;
-    const cacheKey = `${options.method || 'GET'}:${url}:${JSON.stringify(options.body || '')}`;
+  updateHass(hass) {
+    this._hass = hass;
+  }
 
-    if (options.method === undefined || options.method === 'GET') {
+  clearCache() {
+    this._cache.clear();
+  }
+
+  // --- Core request — goes through HA WebSocket to avoid CORS ---
+  async _fetch(endpoint, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const cacheKey = `${method}:${endpoint}:${options.body || ''}`;
+
+    if (method === 'GET') {
       const cached = this._cache.get(cacheKey);
       if (cached && Date.now() - cached.time < this._cacheTimeout) {
         return cached.data;
       }
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'X-Api-Key': this.apiKey,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Seer API error: ${response.status} ${response.statusText}`);
+    const msg = { type: 'seer_ha/request', endpoint, method };
+    if (options.body) {
+      msg.body = JSON.parse(options.body);
     }
 
-    const data = await response.json();
+    const data = await this._hass.connection.sendMessagePromise(msg);
 
-    if (options.method === undefined || options.method === 'GET') {
+    if (method === 'GET') {
       this._cache.set(cacheKey, { data, time: Date.now() });
     }
 
     return data;
-  }
-
-  clearCache() {
-    this._cache.clear();
   }
 
   // --- Image helpers ---
@@ -61,7 +57,7 @@ export class SeerApi {
 
   // --- Search ---
   async search(query, page = 1) {
-    if (!query || query.trim().length === 0) return { results: [] };
+    if (!query || !query.trim()) return { results: [] };
     return this._fetch(`/search?query=${encodeURIComponent(query)}&page=${page}`);
   }
 
@@ -82,22 +78,14 @@ export class SeerApi {
     return this._fetch(`/discover/movies/upcoming?page=${page}`);
   }
 
-  async getMovieGenre(genreId, page = 1) {
-    return this._fetch(`/discover/movies/genre/${genreId}?page=${page}`);
-  }
-
-  async getTvGenre(genreId, page = 1) {
-    return this._fetch(`/discover/tv/genre/${genreId}?page=${page}`);
-  }
-
   // --- Requests ---
   async getRequests(params = {}) {
-    const query = new URLSearchParams();
-    if (params.take) query.set('take', params.take);
-    if (params.skip) query.set('skip', params.skip);
-    if (params.filter) query.set('filter', params.filter); // all, approved, available, pending, processing, unavailable
-    if (params.sort) query.set('sort', params.sort); // added, modified
-    const qs = query.toString();
+    const q = new URLSearchParams();
+    if (params.take) q.set('take', params.take);
+    if (params.skip) q.set('skip', params.skip);
+    if (params.filter) q.set('filter', params.filter);
+    if (params.sort) q.set('sort', params.sort);
+    const qs = q.toString();
     return this._fetch(`/request${qs ? '?' + qs : ''}`);
   }
 
@@ -108,9 +96,6 @@ export class SeerApi {
         mediaType: 'movie',
         mediaId: tmdbId,
         is4k: options.is4k || false,
-        serverId: options.serverId,
-        profileId: options.profileId,
-        rootFolder: options.rootFolder,
       }),
     });
   }
@@ -123,24 +108,16 @@ export class SeerApi {
         mediaId: tmdbId,
         is4k: options.is4k || false,
         seasons: options.seasons || 'all',
-        serverId: options.serverId,
-        profileId: options.profileId,
-        rootFolder: options.rootFolder,
       }),
     });
   }
 
   async updateRequestStatus(requestId, status) {
-    // status: 'approve' or 'decline'
-    return this._fetch(`/request/${requestId}/${status}`, {
-      method: 'POST',
-    });
+    return this._fetch(`/request/${requestId}/${status}`, { method: 'POST' });
   }
 
   async deleteRequest(requestId) {
-    return this._fetch(`/request/${requestId}`, {
-      method: 'DELETE',
-    });
+    return this._fetch(`/request/${requestId}`, { method: 'DELETE' });
   }
 
   // --- Media details ---
@@ -157,98 +134,52 @@ export class SeerApi {
     return this._fetch(`/discover/watchlist?page=${page}`);
   }
 
-  // --- User ---
-  async getCurrentUser() {
-    return this._fetch('/auth/me');
-  }
-
-  async getUsers() {
-    return this._fetch('/user');
-  }
-
   // --- Status ---
   async getStatus() {
     return this._fetch('/status');
   }
 
-  // --- Normalize helpers ---
-  // Normalize API results into a consistent format for the card
+  // --- Normalize ---
   normalizeResult(item) {
     const mediaType = item.mediaType || (item.firstAirDate ? 'tv' : 'movie');
-    const title = item.title || item.name || '';
-    const year = this._extractYear(item);
-    const overview = item.overview || '';
-    const poster = this.posterUrl(item.posterPath);
-    const backdrop = this.backdropUrl(item.backdropPath);
-    const rating = item.voteAverage ? Math.round(item.voteAverage * 10) / 10 : null;
-    const tmdbId = item.id;
-
-    // Media availability status
     const mediaInfo = item.mediaInfo || null;
-    const mediaStatus = mediaInfo?.status || 0;
-    const requests = mediaInfo?.requests || [];
 
     return {
-      tmdbId,
-      title,
-      year,
-      overview,
+      tmdbId: item.id,
+      title: item.title || item.name || '',
+      year: this._extractYear(item),
+      overview: item.overview || '',
       mediaType,
-      poster,
-      backdrop,
-      rating,
-      popularity: item.popularity,
-      genreIds: item.genreIds || [],
-      mediaStatus,
+      poster: this.posterUrl(item.posterPath),
+      backdrop: this.backdropUrl(item.backdropPath),
+      rating: item.voteAverage ? Math.round(item.voteAverage * 10) / 10 : null,
+      mediaStatus: mediaInfo?.status || 0,
       mediaInfo,
-      requests,
-      originalLanguage: item.originalLanguage,
-      // Detailed info (when available)
-      runtime: item.runtime,
-      genres: item.genres,
-      releaseDate: item.releaseDate,
-      firstAirDate: item.firstAirDate,
-      numberOfSeasons: item.numberOfSeasons,
-      status: item.status,
+      requests: mediaInfo?.requests || [],
+      genreIds: item.genreIds || [],
     };
   }
 
   normalizeRequest(req) {
     const media = req.media || {};
-    const mediaType = req.type || media.mediaType || 'movie';
-    const title = media.title || media.name || req.title || req.name || '';
-
     return {
       requestId: req.id,
       tmdbId: media.tmdbId,
-      title,
-      mediaType,
-      status: req.status, // 1=pending, 2=approved, 3=declined
+      title: media.title || media.name || '',
+      mediaType: req.type || media.mediaType || 'movie',
+      status: req.status,
       mediaStatus: media.status || 0,
       poster: this.posterUrl(media.posterPath),
       backdrop: this.backdropUrl(media.backdropPath),
-      requestedBy: req.requestedBy?.displayName || req.requestedBy?.email || 'Unknown',
+      requestedBy: req.requestedBy?.displayName || req.requestedBy?.email || 'Inconnu',
       requestedAt: req.createdAt,
-      updatedAt: req.updatedAt,
       is4k: req.is4k || false,
-      seasons: req.seasons,
-    };
-  }
-
-  normalizeWatchlistItem(item) {
-    return {
-      ...this.normalizeResult(item),
-      watchlistId: item.id,
     };
   }
 
   _extractYear(item) {
-    const dateStr = item.releaseDate || item.firstAirDate;
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr).getFullYear().toString();
-    } catch {
-      return '';
-    }
+    const d = item.releaseDate || item.firstAirDate;
+    if (!d) return '';
+    try { return new Date(d).getFullYear().toString(); } catch { return ''; }
   }
 }

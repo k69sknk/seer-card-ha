@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connexion à Seer",
+        "description": "Entrez l'URL de votre instance Seer et votre clé API.\nVous trouverez la clé API dans Seer → Paramètres → Général.",
+        "data": {
+          "seer_url": "URL de Seer",
+          "seer_api_key": "Clé API"
+        },
+        "data_description": {
+          "seer_url": "Exemple : http://192.168.1.168:5055",
+          "seer_api_key": "Votre clé API Seer"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter à Seer. Vérifiez l'URL.",
+      "invalid_auth": "Clé API invalide.",
+      "unknown": "Erreur inconnue."
+    },
+    "abort": {
+      "already_configured": "Seer est déjà configuré."
+    }
+  }
+}

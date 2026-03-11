@@ -1,5 +1,7 @@
 {
   "name": "Seer Card",
   "render_readme": true,
-  "filename": "seer-card.js"
+  "filename": "seer-card.js",
+  "country": ["FR"],
+  "homeassistant": "2024.1.0"
 }
