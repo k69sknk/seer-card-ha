@@ -1,6 +1,8 @@
 /**
  * Seer Card for Home Assistant
  * https://github.com/k69sknk/seer-card-ha
+ *
+ * UX: onglets → grille de posters → modal de détail
  */
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
@@ -9,946 +11,1029 @@ const SEER_STYLES = `
   ha-card {
     overflow: hidden;
     padding: 0;
-    position: relative;
-    background: var(--card-background-color, #1c1c1c);
+    background: var(--card-background-color, #141414);
     border: none;
-  }
-  .seer-card { position: relative; min-height: 200px; }
-
-  .card-bg {
-    position: absolute; top:0; left:0; right:0; bottom:0;
-    background-size: cover; background-position: center;
-    filter: blur(30px) brightness(0.3) saturate(1.2);
-    transform: scale(1.3); z-index: 0;
-    transition: background-image 0.5s ease;
+    display: flex;
+    flex-direction: column;
+    height: var(--seer-card-height, 640px);
   }
 
-  /* Detail panel */
-  .detail-panel { position: relative; z-index: 1; min-height: 100px; overflow: hidden; }
-  .detail-bg {
-    position: absolute; top:0; left:0; right:0; bottom:0;
-    background-size: cover; background-position: center top;
-    opacity: 0.8; filter: brightness(0.4);
-    transition: all 0.5s ease;
+  /* ── Tab bar ── */
+  .seer-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 8px;
+    background: rgba(0,0,0,.35);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
   }
-  .detail-content {
-    position: relative; z-index: 1; padding: 16px; color: white;
-    min-height: 80px; display: flex; flex-direction: column; justify-content: flex-end;
-  }
-  .detail-title { font-size: 1.3em; font-weight: 600; text-shadow: 0 2px 4px rgba(0,0,0,.6); line-height: 1.2; }
-  .detail-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-  .detail-type { font-size: .8em; text-transform: uppercase; opacity: .8; letter-spacing: .5px; }
-  .detail-rating { display: flex; align-items: center; gap: 4px; font-size: .85em; color: #fbbf24; }
-  .detail-rating ha-icon { --mdc-icon-size: 16px; color: #fbbf24; }
-  .detail-overview {
-    font-size: .85em; opacity: .8; margin-top: 6px;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4;
-  }
-  .detail-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .detail-request-info { display: flex; gap: 16px; margin-top: 8px; opacity: .8; font-size: .85em; }
-  .request-meta { display: flex; align-items: center; gap: 4px; }
-  .request-meta ha-icon { --mdc-icon-size: 16px; }
+  .seer-tabs::-webkit-scrollbar { display: none; }
 
-  /* Not configured notice */
-  .seer-not-configured {
-    padding: 24px 16px; text-align: center; color: var(--primary-text-color); opacity: .7;
+  .seer-tab {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 12px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--secondary-text-color);
+    font-size: .8em;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .2s, border-color .2s;
+    font-family: inherit;
+    flex-shrink: 0;
   }
-  .seer-not-configured ha-icon { --mdc-icon-size: 48px; display: block; margin: 0 auto 12px; opacity: .4; }
-  .seer-not-configured p { margin: 4px 0; font-size: .9em; }
-  .seer-not-configured strong { color: var(--primary-color); }
-
-  /* Sections */
-  .sections-container { position: relative; z-index: 1; padding-bottom: 8px; }
-  .section { margin-bottom: 2px; }
-  .section-header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 12px; cursor: pointer; user-select: none;
-    transition: background-color .25s ease;
-  }
-  .section-header:hover { background: rgba(255,255,255,.05); }
-  .section-header-content { display: flex; align-items: center; gap: 6px; }
-  .section-header-right { display: flex; align-items: center; gap: 8px; }
-  .section-toggle-icon { --mdc-icon-size: 18px; transition: transform .25s ease; opacity: .6; }
-  .section-icon { --mdc-icon-size: 16px; opacity: .7; }
-  .section-label {
-    font-weight: 600; font-size: .75em; text-transform: uppercase;
-    letter-spacing: .8px; opacity: .9; color: var(--primary-text-color);
-  }
-  .section-badge {
-    font-size: .7em; background: rgba(255,255,255,.1); padding: 1px 6px;
-    border-radius: 10px; color: var(--secondary-text-color); min-width: 18px; text-align: center;
-  }
-  .section-badge:empty { display: none; }
-  .section-content { max-height: 300px; transition: all .25s ease; overflow: hidden; opacity: 1; }
-  .section-content.collapsed { max-height: 0; opacity: 0; }
-
-  /* Media list */
-  .media-list {
-    display: flex; gap: 6px; overflow-x: auto; padding: 4px 12px 8px;
-    scrollbar-width: thin; scrollbar-color: #6366f1 transparent;
-    -webkit-overflow-scrolling: touch;
-  }
-  .media-list::-webkit-scrollbar { height: 3px; }
-  .media-list::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
-  @media (max-width: 600px) {
-    .media-list { scrollbar-width: none; }
-    .media-list::-webkit-scrollbar { display: none; }
+  .seer-tab ha-icon { --mdc-icon-size: 17px; }
+  .seer-tab:hover { color: var(--primary-text-color); }
+  .seer-tab.active {
+    color: var(--primary-color, #6366f1);
+    border-bottom-color: var(--primary-color, #6366f1);
   }
 
-  /* Media item */
-  .media-item {
-    flex: 0 0 auto; width: 90px; height: 135px; position: relative;
-    cursor: pointer; border-radius: 8px; overflow: hidden;
-    transition: transform .25s ease, box-shadow .25s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  /* ── Search bar ── */
+  .seer-search-bar {
+    padding: 8px 12px;
+    background: rgba(0,0,0,.2);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    flex-shrink: 0;
   }
-  .media-item:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 6px 16px rgba(0,0,0,.4); }
-  .media-item.selected { box-shadow: 0 0 0 2px #6366f1, 0 4px 12px rgba(99,102,241,.3); transform: translateY(-2px); }
-  .media-item img { width: 100%; height: 100%; object-fit: cover; }
-  .no-poster {
-    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-    background: rgba(255,255,255,.05); color: var(--secondary-text-color);
+  .seer-search-wrap {
+    display: flex;
+    align-items: center;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 20px;
+    padding: 0 14px;
+    gap: 8px;
+    transition: border-color .2s;
   }
-  .no-poster ha-icon { --mdc-icon-size: 32px; opacity: .3; }
-  .media-item-overlay {
-    position: absolute; bottom:0; left:0; right:0; padding: 24px 6px 6px;
+  .seer-search-wrap:focus-within {
+    border-color: var(--primary-color, #6366f1);
+    background: rgba(255,255,255,.11);
+  }
+  .seer-search-wrap ha-icon { --mdc-icon-size: 18px; opacity: .5; flex-shrink: 0; }
+  .seer-search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    padding: 9px 0;
+    color: var(--primary-text-color);
+    font-size: .9em;
+    font-family: inherit;
+  }
+  .seer-search-input::placeholder { color: var(--secondary-text-color); opacity: .5; }
+  .seer-search-clear {
+    background: none; border: none; cursor: pointer;
+    color: var(--secondary-text-color); padding: 0; display: flex; align-items: center;
+  }
+  .seer-search-clear ha-icon { --mdc-icon-size: 17px; }
+
+  /* ── Content area + grid ── */
+  .seer-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.15) transparent;
+  }
+  .seer-content::-webkit-scrollbar { width: 4px; }
+  .seer-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
+
+  .seer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    padding: 12px;
+  }
+
+  /* ── Poster item ── */
+  .poster-item {
+    position: relative;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255,255,255,.05);
+    aspect-ratio: 2/3;
+    transition: transform .2s ease, box-shadow .2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  }
+  .poster-item:hover { transform: scale(1.04); box-shadow: 0 8px 20px rgba(0,0,0,.5); }
+  .poster-item img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    border-radius: 8px;
+  }
+  .poster-item .no-img {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; color: var(--secondary-text-color); opacity: .3; font-size: .7em;
+  }
+  .poster-item .no-img ha-icon { --mdc-icon-size: 32px; }
+
+  .poster-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 28px 6px 6px;
     background: linear-gradient(transparent, rgba(0,0,0,.9));
+    border-radius: 0 0 8px 8px;
   }
-  .media-item-title {
-    font-size: .7em; color: white; font-weight: 500;
+  .poster-title {
+    font-size: .68em; font-weight: 500; color: white;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    text-shadow: 0 1px 3px rgba(0,0,0,.8); line-height: 1.2;
+    text-shadow: 0 1px 3px rgba(0,0,0,.8);
+    line-height: 1.2;
   }
-  .media-item-year { font-size: .6em; color: rgba(255,255,255,.6); }
+  .poster-year { font-size: .58em; color: rgba(255,255,255,.55); margin-top: 1px; }
 
-  /* Status dots */
-  .status-dot {
-    position: absolute; top: 4px; left: 4px; width: 8px; height: 8px;
-    border-radius: 50%; border: 1.5px solid rgba(0,0,0,.3);
+  /* Status dot */
+  .poster-dot {
+    position: absolute; top: 5px; left: 5px;
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1.5px solid rgba(0,0,0,.4);
   }
-  .status-dot.s-available { background: #22c55e; }
-  .status-dot.s-partial   { background: #f59e0b; }
-  .status-dot.s-processing{ background: #3b82f6; }
-  .status-dot.s-pending   { background: #f59e0b; }
-  .status-dot.s-approved  { background: #22c55e; }
-  .status-dot.s-declined  { background: #ef4444; }
+  .dot-available  { background: #22c55e; }
+  .dot-partial    { background: #f59e0b; }
+  .dot-processing { background: #3b82f6; }
+  .dot-pending    { background: #f59e0b; }
+  .dot-declined   { background: #ef4444; }
 
-  /* Type + request badge */
-  .media-type-badge {
-    position: absolute; top: 4px; right: 4px; font-size: .55em; font-weight: 700;
-    padding: 1px 4px; border-radius: 3px; background: rgba(0,0,0,.6); color: white;
-    text-transform: uppercase; letter-spacing: .5px;
+  /* Type badge */
+  .poster-type {
+    position: absolute; top: 5px; right: 5px;
+    font-size: .55em; font-weight: 700; letter-spacing: .4px;
+    padding: 2px 5px; border-radius: 4px;
+    background: rgba(0,0,0,.65); color: white; text-transform: uppercase;
   }
-  .req-badge {
-    position: absolute; top: 4px; left: 4px; font-size: .6em; font-weight: 600;
-    width: 16px; height: 16px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; line-height: 1;
-  }
-  .req-badge.b-pending  { background: #f59e0b; color: #000; }
-  .req-badge.b-approved { background: #22c55e; color: #000; }
-  .req-badge.b-declined { background: #ef4444; color: white; }
 
-  /* Badges */
+  /* Request badge (for requests section) */
+  .poster-req {
+    position: absolute; top: 5px; left: 5px;
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65em; font-weight: 700;
+  }
+  .req-pending  { background: #f59e0b; color: #000; }
+  .req-approved { background: #22c55e; color: #000; }
+  .req-declined { background: #ef4444; color: white; }
+
+  /* ── Skeleton loader ── */
+  .seer-skeletons { display: contents; }
+  .skeleton {
+    aspect-ratio: 2/3; border-radius: 8px;
+    background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.1) 50%, rgba(255,255,255,.05) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* ── Empty / error states ── */
+  .seer-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 200px; gap: 12px; color: var(--secondary-text-color); opacity: .5;
+  }
+  .seer-empty ha-icon { --mdc-icon-size: 40px; }
+  .seer-empty p { margin: 0; font-size: .9em; text-align: center; }
+
+  /* ── Modal overlay ── */
+  .seer-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+    backdrop-filter: blur(6px);
+    animation: fadeIn .15s ease;
+  }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  .seer-modal {
+    position: relative;
+    background: var(--card-background-color, #1e1e1e);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 88vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,.7);
+    animation: slideUp .2s ease;
+  }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+  /* Modal close button */
+  .modal-close {
+    position: absolute; top: 10px; right: 10px; z-index: 2;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(0,0,0,.6); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: white; transition: background .2s;
+  }
+  .modal-close:hover { background: rgba(0,0,0,.85); }
+  .modal-close ha-icon { --mdc-icon-size: 18px; }
+
+  /* Modal hero (backdrop image) */
+  .modal-hero {
+    position: relative;
+    height: 180px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .modal-backdrop-img {
+    width: 100%; height: 100%; object-fit: cover;
+    filter: brightness(.6);
+  }
+  .modal-hero-gradient {
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, transparent 30%, var(--card-background-color, #1e1e1e));
+  }
+
+  /* Poster + title row */
+  .modal-header {
+    display: flex;
+    gap: 14px;
+    padding: 0 16px;
+    margin-top: -60px;
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+  .modal-poster {
+    width: 85px;
+    height: 127px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    border: 2px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.05);
+  }
+  .modal-poster-placeholder {
+    width: 85px; height: 127px; border-radius: 8px;
+    background: rgba(255,255,255,.07); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid rgba(255,255,255,.1);
+  }
+  .modal-poster-placeholder ha-icon { --mdc-icon-size: 28px; opacity: .3; }
+  .modal-title-block {
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding-bottom: 8px; min-width: 0;
+  }
+  .modal-title {
+    font-size: 1.15em; font-weight: 700; color: var(--primary-text-color);
+    line-height: 1.2; margin: 0 0 6px; word-break: break-word;
+  }
+  .modal-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+  /* Modal body (scrollable) */
+  .modal-body {
+    padding: 12px 16px 20px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .modal-overview {
+    font-size: .85em; line-height: 1.55; color: var(--secondary-text-color);
+    margin: 0 0 14px;
+  }
+  .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* ── Badges ── */
   .badge {
-    display: inline-flex; align-items: center; padding: 2px 8px;
-    border-radius: 12px; font-size: .75em; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 20px;
+    font-size: .75em; font-weight: 600; white-space: nowrap;
   }
-  .b-available  { background: #22c55e; color: #000; }
-  .b-partial    { background: #f59e0b; color: #000; }
-  .b-processing { background: #3b82f6; color: white; }
-  .b-pending    { background: #f59e0b; color: #000; }
-  .b-approved   { background: #22c55e; color: #000; }
-  .b-declined   { background: #ef4444; color: white; }
-  .b-unknown    { background: rgba(255,255,255,.2); color: var(--primary-text-color); }
-  .b-4k         { background: #7c3aed; color: white; }
+  .badge ha-icon { --mdc-icon-size: 13px; }
+  .b-available  { background: rgba(34,197,94,.2);  color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+  .b-partial    { background: rgba(245,158,11,.2);  color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+  .b-processing { background: rgba(59,130,246,.2);  color: #60a5fa; border: 1px solid rgba(59,130,246,.3); }
+  .b-pending    { background: rgba(245,158,11,.2);  color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+  .b-approved   { background: rgba(34,197,94,.2);   color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+  .b-declined   { background: rgba(239,68,68,.2);   color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+  .b-type       { background: rgba(255,255,255,.1);  color: var(--secondary-text-color); border: 1px solid rgba(255,255,255,.15); }
+  .b-rating     { background: rgba(251,191,36,.15);  color: #fbbf24; border: 1px solid rgba(251,191,36,.25); }
+  .b-4k         { background: rgba(124,58,237,.25);  color: #a78bfa; border: 1px solid rgba(124,58,237,.35); }
+  .b-requester  { background: rgba(255,255,255,.07); color: var(--secondary-text-color); border: 1px solid rgba(255,255,255,.1); font-weight: 400; }
 
-  /* Buttons */
+  /* ── Buttons ── */
   .btn {
-    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
-    border: none; border-radius: 8px; cursor: pointer; font-size: .85em; font-weight: 500;
-    transition: all .25s ease; color: white; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: none; border-radius: 8px;
+    cursor: pointer; font-size: .85em; font-weight: 600;
+    transition: all .2s; font-family: inherit; color: white;
   }
   .btn ha-icon { --mdc-icon-size: 16px; }
-  .btn:disabled { opacity: .6; cursor: not-allowed; }
-  .btn-primary  { background: #6366f1; }
-  .btn-primary:hover:not(:disabled) { background: #818cf8; }
-  .btn-secondary{ background: rgba(255,255,255,.15); }
-  .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,.25); }
-  .btn-success  { background: #22c55e; color: #000; }
-  .btn-danger   { background: #ef4444; }
-  .btn-outline  { background: transparent; border: 1px solid rgba(255,255,255,.3); color: var(--primary-text-color); }
-  .btn-outline:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn-primary  { background: var(--primary-color, #6366f1); }
+  .btn-primary:hover:not(:disabled)  { filter: brightness(1.15); }
+  .btn-success  { background: #16a34a; }
+  .btn-success:hover:not(:disabled)  { background: #15803d; }
+  .btn-danger   { background: #dc2626; }
+  .btn-danger:hover:not(:disabled)   { background: #b91c1c; }
+  .btn-ghost    { background: rgba(255,255,255,.1); }
+  .btn-ghost:hover:not(:disabled)    { background: rgba(255,255,255,.18); }
 
-  /* Search */
-  .search-section { margin-bottom: 2px; }
-  .search-container { display: flex; align-items: center; padding: 8px 12px; position: relative; }
-  .search-icon { --mdc-icon-size: 20px; opacity: .5; position: absolute; left: 20px; z-index: 1; }
-  .search-input {
-    flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1);
-    border-radius: 20px; padding: 8px 36px 8px 40px; color: var(--primary-text-color);
-    font-size: .9em; outline: none; transition: all .25s ease; font-family: inherit;
-  }
-  .search-input:focus { background: rgba(255,255,255,.12); border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.2); }
-  .search-input::placeholder { color: var(--secondary-text-color); opacity: .5; }
-  .search-clear { position: absolute; right: 20px; background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 4px; display: flex; align-items: center; }
-  .search-clear ha-icon { --mdc-icon-size: 18px; }
-
-  /* Filter chips */
-  .filter-chips { display: flex; gap: 4px; }
-  .chip {
-    background: rgba(255,255,255,.08); border: none; border-radius: 12px;
-    padding: 2px 8px; font-size: .65em; color: var(--secondary-text-color);
-    cursor: pointer; transition: all .25s ease; font-family: inherit; white-space: nowrap;
-  }
-  .chip:hover { background: rgba(255,255,255,.15); }
-  .chip.active { background: #6366f1; color: white; }
-
-  /* Empty / loading */
-  .empty-section {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 16px; color: var(--secondary-text-color); font-size: .85em; opacity: .6;
-  }
-  .empty-section ha-icon { --mdc-icon-size: 20px; }
-  .loading-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; color: var(--secondary-text-color); font-size: .85em; }
-  @keyframes seer-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .spin { animation: seer-spin 1s linear infinite; display: inline-flex; }
-
-  /* Modals */
-  .seer-modal-overlay {
-    position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,.6);
-    display: flex; align-items: center; justify-content: center; z-index: 9999;
+  /* ── Confirm / season picker modals ── */
+  .seer-mini-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10000; padding: 16px;
     backdrop-filter: blur(4px);
   }
-  .seer-modal {
-    background: var(--card-background-color, #2a2a2a); border-radius: 12px;
-    width: 90%; max-width: 380px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  .seer-mini-modal {
+    background: var(--card-background-color, #1e1e1e);
+    border-radius: 12px; width: 100%; max-width: 340px;
+    box-shadow: 0 16px 60px rgba(0,0,0,.6); overflow: hidden;
   }
-  .seer-modal-header {
-    display: flex; justify-content: space-between; align-items: center;
+  .mini-header {
     padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.08);
     font-weight: 600; font-size: .95em;
+    display: flex; justify-content: space-between; align-items: center;
   }
-  .seer-modal-close { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 4px; display: flex; align-items: center; }
-  .seer-modal-body { padding: 16px; }
-  .seer-modal-body p { margin: 0 0 16px; font-size: .9em; color: var(--primary-text-color); }
-  .season-options { display: flex; flex-direction: column; gap: 8px; }
-  .season-options .btn { justify-content: center; width: 100%; }
-  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .mini-close { background:none; border:none; cursor:pointer; color:var(--secondary-text-color); display:flex; padding:2px; }
+  .mini-close ha-icon { --mdc-icon-size: 18px; }
+  .mini-body { padding: 16px; }
+  .mini-body p { margin: 0 0 14px; font-size: .9em; color: var(--primary-text-color); }
+  .mini-options { display: flex; flex-direction: column; gap: 8px; }
+  .mini-options .btn { justify-content: center; }
+  .mini-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
 
-  /* Responsive */
-  .hidden { display: none !important; }
-  @media (max-width: 500px) {
-    .detail-title { font-size: 1.1em; }
-    .detail-overview { -webkit-line-clamp: 1; }
-    .media-item { width: 80px; height: 120px; }
-    .filter-chips { display: none; }
-    .btn { padding: 5px 10px; font-size: .8em; }
+  /* ── Spin ── */
+  @keyframes seer-spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-flex; animation: seer-spin .8s linear infinite; }
+
+  /* ── Responsive ── */
+  @media (min-width: 600px) {
+    .seer-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+    .modal-hero { height: 220px; }
+  }
+  @media (max-width: 420px) {
+    .seer-tab span { display: none; }
+    .seer-tab { padding: 10px 10px; }
+    .seer-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; padding: 8px; }
+    .modal-poster { width: 70px; height: 105px; }
   }
 `;
 
-// ─── API CLIENT ───────────────────────────────────────────────────────────────
+// ─── API ─────────────────────────────────────────────────────────────────────
 
-const TMDB_IMG = 'https://image.tmdb.org/t/p';
+const TMDB = 'https://image.tmdb.org/t/p';
 
 class SeerApi {
-  constructor(hass) {
-    this._hass = hass;
-    this._cache = new Map();
-    this._ttl = 60000;
-  }
+  constructor(hass) { this._h = hass; this._c = new Map(); this._ttl = 60000; }
+  updateHass(h) { this._h = h; }
+  clearCache()  { this._c.clear(); }
 
-  updateHass(h) { this._hass = h; }
-  clearCache() { this._cache.clear(); }
-
-  async _fetch(endpoint, options) {
-    const method = (options && options.method || 'GET').toUpperCase();
-    const cacheKey = method + ':' + endpoint + ':' + (options && options.body || '');
-
+  async _req(endpoint, opts) {
+    const method = (opts && opts.method || 'GET').toUpperCase();
+    const key = method + endpoint + (opts && opts.body || '');
     if (method === 'GET') {
-      const cached = this._cache.get(cacheKey);
-      if (cached && Date.now() - cached.t < this._ttl) return cached.d;
+      const hit = this._c.get(key);
+      if (hit && Date.now() - hit.t < this._ttl) return hit.d;
     }
-
     const msg = { type: 'seer_ha/request', endpoint, method };
-    if (options && options.body) msg.body = JSON.parse(options.body);
-
-    const data = await this._hass.connection.sendMessagePromise(msg);
-
-    if (method === 'GET') this._cache.set(cacheKey, { d: data, t: Date.now() });
-    return data;
+    if (opts && opts.body) msg.body = JSON.parse(opts.body);
+    const d = await this._h.connection.sendMessagePromise(msg);
+    if (method === 'GET') this._c.set(key, { d, t: Date.now() });
+    return d;
   }
 
-  poster(p, s)  { s = s || 'w500';  if (!p) return null; return p.startsWith('http') ? p : TMDB_IMG + '/' + s + p; }
-  backdrop(p, s){ s = s || 'w1280'; if (!p) return null; return p.startsWith('http') ? p : TMDB_IMG + '/' + s + p; }
+  img(p, s) { s = s||'w500';  if (!p) return null; return p.startsWith('http') ? p : TMDB+'/'+s+p; }
+  bg(p, s)  { s = s||'w780';  if (!p) return null; return p.startsWith('http') ? p : TMDB+'/'+s+p; }
 
-  search(q, p)        { p = p||1; if (!q||!q.trim()) return Promise.resolve({results:[]}); return this._fetch('/search?query=' + encodeURIComponent(q) + '&page=' + p); }
-  getTrending(p)      { return this._fetch('/discover/trending?page=' + (p||1)); }
-  getPopularMovies(p) { return this._fetch('/discover/movies?page=' + (p||1)); }
-  getPopularTV(p)     { return this._fetch('/discover/tv?page=' + (p||1)); }
-  getUpcoming(p)      { return this._fetch('/discover/movies/upcoming?page=' + (p||1)); }
-  getWatchlist(p)     { return this._fetch('/discover/watchlist?page=' + (p||1)); }
+  getTrending(p)   { return this._req('/discover/trending?page='+(p||1)); }
+  getMovies(p)     { return this._req('/discover/movies?page='+(p||1)); }
+  getTV(p)         { return this._req('/discover/tv?page='+(p||1)); }
+  getUpcoming(p)   { return this._req('/discover/movies/upcoming?page='+(p||1)); }
+  getWatchlist(p)  { return this._req('/discover/watchlist?page='+(p||1)); }
+  search(q, p)     { if (!q||!q.trim()) return Promise.resolve({results:[]}); return this._req('/search?query='+encodeURIComponent(q)+'&page='+(p||1)); }
 
-  getRequests(params) {
-    params = params || {};
-    const q = new URLSearchParams();
-    if (params.take)   q.set('take', params.take);
-    if (params.filter) q.set('filter', params.filter);
-    if (params.sort)   q.set('sort', params.sort);
-    const qs = q.toString();
-    return this._fetch('/request' + (qs ? '?' + qs : ''));
+  getRequests(f) {
+    const q = new URLSearchParams({ take: 50, sort: 'added' });
+    if (f && f !== 'all') q.set('filter', f);
+    return this._req('/request?' + q.toString());
   }
 
-  createMovieRequest(id, opts) {
-    opts = opts || {};
-    return this._fetch('/request', { method:'POST', body: JSON.stringify({ mediaType:'movie', mediaId:id, is4k: opts.is4k||false }) });
-  }
+  reqMovie(id, is4k) { return this._req('/request', { method:'POST', body: JSON.stringify({ mediaType:'movie', mediaId:id, is4k:!!is4k }) }); }
+  reqTV(id, seasons, is4k) { return this._req('/request', { method:'POST', body: JSON.stringify({ mediaType:'tv', mediaId:id, seasons:seasons||'all', is4k:!!is4k }) }); }
+  approve(id) { return this._req('/request/'+id+'/approve', { method:'POST' }); }
+  decline(id) { return this._req('/request/'+id+'/decline', { method:'POST' }); }
+  remove(id)  { return this._req('/request/'+id, { method:'DELETE' }); }
 
-  createTvRequest(id, opts) {
-    opts = opts || {};
-    return this._fetch('/request', { method:'POST', body: JSON.stringify({ mediaType:'tv', mediaId:id, is4k: opts.is4k||false, seasons: opts.seasons||'all' }) });
-  }
-
-  approveRequest(id) { return this._fetch('/request/' + id + '/approve', { method:'POST' }); }
-  declineRequest(id) { return this._fetch('/request/' + id + '/decline', { method:'POST' }); }
-  deleteRequest(id)  { return this._fetch('/request/' + id, { method:'DELETE' }); }
-
-  normalizeResult(item) {
+  normalizeMedia(item) {
     const mt = item.mediaType || (item.firstAirDate ? 'tv' : 'movie');
     const mi = item.mediaInfo || null;
-    const d  = item.releaseDate || item.firstAirDate;
     let year = '';
-    try { if (d) year = new Date(d).getFullYear().toString(); } catch(e){}
+    try { const d = item.releaseDate||item.firstAirDate; if(d) year = ''+new Date(d).getFullYear(); } catch(e){}
+    const reqStatus = mi && mi.requests && mi.requests.length ? mi.requests[mi.requests.length-1].status : 0;
     return {
-      tmdbId: item.id,
-      title: item.title || item.name || '',
+      tmdbId:      item.id,
+      title:       item.title || item.name || '',
       year,
-      overview: item.overview || '',
-      mediaType: mt,
-      poster:   this.poster(item.posterPath),
-      backdrop: this.backdrop(item.backdropPath),
-      rating:   item.voteAverage ? Math.round(item.voteAverage * 10) / 10 : null,
-      mediaStatus: mi ? mi.status : 0,
-      requests: mi ? (mi.requests || []) : [],
+      overview:    item.overview || '',
+      mediaType:   mt,
+      poster:      this.img(item.posterPath),
+      backdrop:    this.bg(item.backdropPath),
+      rating:      item.voteAverage ? Math.round(item.voteAverage*10)/10 : null,
+      mediaStatus: mi ? (mi.status||0) : 0,
+      reqStatus,
+      requests:    mi ? (mi.requests||[]) : [],
     };
   }
 
   normalizeRequest(req) {
     const m = req.media || {};
+    let year = '';
+    try { const d = m.releaseDate||m.firstAirDate; if(d) year = ''+new Date(d).getFullYear(); } catch(e){}
     return {
-      requestId: req.id,
-      tmdbId: m.tmdbId,
-      title: m.title || m.name || '',
-      mediaType: req.type || m.mediaType || 'movie',
-      status: req.status,
-      mediaStatus: m.status || 0,
-      poster:   this.poster(m.posterPath),
-      backdrop: this.backdrop(m.backdropPath),
-      requestedBy: (req.requestedBy && (req.requestedBy.displayName || req.requestedBy.email)) || 'Inconnu',
+      requestId:   req.id,
+      tmdbId:      m.tmdbId,
+      title:       m.title || m.name || req.subject || '',
+      year,
+      mediaType:   req.type || m.mediaType || 'movie',
+      reqStatus:   req.status,          // 1=pending 2=approved 3=declined
+      mediaStatus: m.status || 0,       // 5=available
+      poster:      this.img(m.posterPath),
+      backdrop:    this.bg(m.backdropPath || m.posterPath),
+      requestedBy: (req.requestedBy && (req.requestedBy.displayName||req.requestedBy.email)) || '?',
       requestedAt: req.createdAt,
-      is4k: req.is4k || false,
+      is4k:        !!req.is4k,
+      overview:    m.overview || '',
     };
-  }
-}
-
-// ─── BASE SECTION ─────────────────────────────────────────────────────────────
-
-class SeerBaseSection {
-  constructor(key, title, icon) {
-    this.key   = key;
-    this.title = title;
-    this.icon  = icon || 'mdi:filmstrip';
-    this._items = [];
-  }
-
-  generateTemplate() {
-    return `
-      <div class="section" data-section="${this.key}">
-        <div class="section-header">
-          <div class="section-header-content">
-            <ha-icon class="section-toggle-icon" icon="mdi:chevron-down"></ha-icon>
-            <ha-icon class="section-icon" icon="${this.icon}"></ha-icon>
-            <div class="section-label">${this.title}</div>
-          </div>
-          <div class="section-badge" data-badge="${this.key}"></div>
-        </div>
-        <div class="section-content">
-          <div class="media-list" data-list="${this.key}"></div>
-        </div>
-      </div>`;
-  }
-
-  _statusDotClass(item) {
-    const ms = item.mediaStatus;
-    if (ms === 5) return 's-available';
-    if (ms === 4) return 's-partial';
-    if (ms === 3) return 's-processing';
-    if (ms === 2 || ms === 1) return 's-pending';
-    if (item.requests && item.requests.length) {
-      const s = item.requests[item.requests.length - 1].status;
-      if (s === 2) return 's-approved';
-      if (s === 1) return 's-pending';
-      if (s === 3) return 's-declined';
-    }
-    return '';
-  }
-
-  _renderItem(item, index, card) {
-    const sel = card._selectedSection === this.key && card._selectedIndex === index;
-    const dot = this._statusDotClass(item);
-    const typeLabel = item.mediaType === 'tv' ? 'TV' : 'Film';
-    return `
-      <div class="media-item${sel ? ' selected' : ''}" data-section="${this.key}" data-index="${index}">
-        ${item.poster
-          ? `<img src="${item.poster}" alt="${item.title||''}" loading="lazy">`
-          : `<div class="no-poster"><ha-icon icon="mdi:image-off"></ha-icon></div>`}
-        <div class="media-item-overlay">
-          <div class="media-item-title">${item.title||''}</div>
-          ${item.year ? `<div class="media-item-year">${item.year}</div>` : ''}
-        </div>
-        ${dot ? `<div class="status-dot ${dot}"></div>` : ''}
-        ${item.mediaType ? `<div class="media-type-badge">${typeLabel}</div>` : ''}
-      </div>`;
-  }
-
-  renderItems(card, items) {
-    const list = card.querySelector('[data-list="' + this.key + '"]');
-    if (!list) return;
-    this._items = items;
-
-    if (!items || !items.length) {
-      list.innerHTML = `<div class="empty-section"><ha-icon icon="mdi:movie-search-outline"></ha-icon><span>Aucun contenu</span></div>`;
-      return;
-    }
-
-    list.innerHTML = items.map((it, i) => this._renderItem(it, i, card)).join('');
-
-    const badge = card.querySelector('[data-badge="' + this.key + '"]');
-    if (badge) badge.textContent = items.length;
-
-    list.querySelectorAll('.media-item').forEach(el => {
-      el.onclick = () => {
-        const idx = parseInt(el.dataset.index);
-        card._selectedSection = this.key;
-        card._selectedIndex   = idx;
-        this.showDetail(card, this._items[idx]);
-        card.querySelectorAll('.media-item').forEach(i => {
-          i.classList.toggle('selected', i.dataset.section === this.key && parseInt(i.dataset.index) === idx);
-        });
-      };
-    });
-  }
-
-  showDetail(card, item) {
-    if (!item) return;
-    if (item.backdrop || item.poster) card._setBackground(item.backdrop || item.poster);
-
-    const typeLabel = item.mediaType === 'tv' ? 'Série TV' : 'Film';
-    const rating    = item.rating ? `<div class="detail-rating"><ha-icon icon="mdi:star"></ha-icon> ${item.rating}/10</div>` : '';
-    const statusBadge = this._mediaStatusBadge(item.mediaStatus);
-    const action    = this._actionButton(item);
-
-    card._detailContent.innerHTML = `
-      <div class="detail-header">
-        <div class="detail-title">${item.title||''}${item.year ? ' (' + item.year + ')' : ''}</div>
-        <div class="detail-meta">
-          <span class="detail-type">${typeLabel}</span>
-          ${rating}${statusBadge}
-        </div>
-      </div>
-      ${item.overview ? `<div class="detail-overview">${item.overview}</div>` : ''}
-      <div class="detail-actions">${action}</div>`;
-  }
-
-  _mediaStatusBadge(ms) {
-    const map = { 5:'<span class="badge b-available">Disponible</span>', 4:'<span class="badge b-partial">Partiel</span>', 3:'<span class="badge b-processing">En cours</span>', 2:'<span class="badge b-pending">En attente</span>' };
-    return map[ms] || '';
-  }
-
-  _actionButton(item) {
-    if (!item.tmdbId || item.mediaStatus === 5) return '';
-    if (item.requests && item.requests.length) {
-      const s = item.requests[item.requests.length - 1].status;
-      if (s === 1) return `<button class="btn btn-secondary" disabled><ha-icon icon="mdi:clock-outline"></ha-icon> En attente</button>`;
-      if (s === 2) return `<button class="btn btn-success" disabled><ha-icon icon="mdi:check"></ha-icon> Approuvé</button>`;
-    }
-    const mt = item.mediaType || 'movie';
-    return `<button class="btn btn-primary" data-action="request" data-tmdb-id="${item.tmdbId}" data-media-type="${mt}" data-title="${(item.title||'').replace(/"/g,'&quot;')}"><ha-icon icon="mdi:plus"></ha-icon> Demander</button>`;
-  }
-
-  formatDate(s) {
-    if (!s) return '';
-    try { return new Date(s).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }); } catch(e) { return ''; }
-  }
-
-  async load() {}
-}
-
-// ─── SEARCH SECTION ──────────────────────────────────────────────────────────
-
-class SeerSearchSection extends SeerBaseSection {
-  constructor() { super('search', 'Recherche', 'mdi:magnify'); this._q = ''; this._timer = null; }
-
-  generateTemplate() {
-    return `
-      <div class="section search-section" data-section="${this.key}">
-        <div class="search-container">
-          <ha-icon icon="mdi:magnify" class="search-icon"></ha-icon>
-          <input type="text" class="search-input" placeholder="Rechercher un film ou une série..." data-search-input>
-          <button class="search-clear hidden" data-search-clear><ha-icon icon="mdi:close"></ha-icon></button>
-        </div>
-        <div class="section-content">
-          <div class="media-list" data-list="${this.key}"></div>
-        </div>
-      </div>`;
-  }
-
-  setupHandlers(card) {
-    const input = card.querySelector('[data-search-input]');
-    const clear = card.querySelector('[data-search-clear]');
-    if (!input) return;
-
-    input.oninput = () => {
-      this._q = input.value;
-      clear.classList.toggle('hidden', !this._q);
-      clearTimeout(this._timer);
-      this._timer = setTimeout(() => this._doSearch(card), 400);
-    };
-    input.onkeydown = (e) => { if (e.key === 'Enter') { clearTimeout(this._timer); this._doSearch(card); } };
-    if (clear) clear.onclick = () => {
-      input.value = ''; this._q = ''; clear.classList.add('hidden');
-      const list = card.querySelector('[data-list="' + this.key + '"]');
-      if (list) list.innerHTML = '';
-    };
-  }
-
-  async _doSearch(card) {
-    if (!this._q.trim()) return;
-    const list = card.querySelector('[data-list="' + this.key + '"]');
-    if (list) list.innerHTML = `<div class="loading-indicator"><ha-icon icon="mdi:loading" class="spin"></ha-icon><span>Recherche...</span></div>`;
-    try {
-      const max  = card.config.max_items || 20;
-      const data = await card._api.search(this._q);
-      const items = (data.results || []).filter(r => r.mediaType === 'movie' || r.mediaType === 'tv').slice(0, max).map(r => card._api.normalizeResult(r));
-      this.renderItems(card, items);
-      if (!items.length && list) list.innerHTML = `<div class="empty-section"><ha-icon icon="mdi:movie-search-outline"></ha-icon><span>Aucun résultat pour "${this._q}"</span></div>`;
-    } catch(e) {
-      if (list) list.innerHTML = `<div class="empty-section"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>Erreur de recherche</span></div>`;
-    }
-  }
-
-  async load() {}
-}
-
-// ─── REQUESTS SECTION ─────────────────────────────────────────────────────────
-
-class SeerRequestsSection extends SeerBaseSection {
-  constructor() { super('requests', 'Requêtes', 'mdi:clipboard-list-outline'); this._filter = 'all'; }
-
-  generateTemplate() {
-    return `
-      <div class="section" data-section="${this.key}">
-        <div class="section-header">
-          <div class="section-header-content">
-            <ha-icon class="section-toggle-icon" icon="mdi:chevron-down"></ha-icon>
-            <ha-icon class="section-icon" icon="${this.icon}"></ha-icon>
-            <div class="section-label">${this.title}</div>
-          </div>
-          <div class="section-header-right">
-            <div class="filter-chips" data-filter-group="requests">
-              <button class="chip active" data-filter="all">Tout</button>
-              <button class="chip" data-filter="pending">En attente</button>
-              <button class="chip" data-filter="approved">Approuvé</button>
-              <button class="chip" data-filter="available">Disponible</button>
-            </div>
-            <div class="section-badge" data-badge="${this.key}"></div>
-          </div>
-        </div>
-        <div class="section-content">
-          <div class="media-list" data-list="${this.key}"></div>
-        </div>
-      </div>`;
-  }
-
-  async load(card) {
-    try {
-      const max  = card.config.max_items || 20;
-      const data = await card._api.getRequests({ take: max, filter: this._filter === 'all' ? undefined : this._filter, sort: 'added' });
-      const items = (data.results || []).map(r => card._api.normalizeRequest(r));
-      this._setupFilters(card);
-      this._renderRequests(card, items);
-    } catch(e) {
-      const list = card.querySelector('[data-list="' + this.key + '"]');
-      if (list) list.innerHTML = `<div class="empty-section"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>Erreur de chargement</span></div>`;
-    }
-  }
-
-  _setupFilters(card) {
-    const g = card.querySelector('[data-filter-group="requests"]');
-    if (!g || g._done) return;
-    g.querySelectorAll('.chip').forEach(c => {
-      c.onclick = (e) => {
-        e.stopPropagation();
-        g.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
-        c.classList.add('active');
-        this._filter = c.dataset.filter;
-        this.load(card);
-      };
-    });
-    g._done = true;
-  }
-
-  _renderRequests(card, items) {
-    this._items = items;
-    const list = card.querySelector('[data-list="' + this.key + '"]');
-    if (!list) return;
-
-    const badge = card.querySelector('[data-badge="' + this.key + '"]');
-    if (badge) badge.textContent = items.length;
-
-    if (!items.length) {
-      list.innerHTML = `<div class="empty-section"><ha-icon icon="mdi:clipboard-check-outline"></ha-icon><span>Aucune requête</span></div>`;
-      return;
-    }
-
-    const statusLabel = { 1:'?', 2:'✓', 3:'✗' };
-    const statusClass = { 1:'b-pending', 2:'b-approved', 3:'b-declined' };
-
-    list.innerHTML = items.map((item, i) => {
-      const sel = card._selectedSection === this.key && card._selectedIndex === i;
-      const sl  = statusLabel[item.status] || '?';
-      const sc  = statusClass[item.status] || 'b-unknown';
-      return `
-        <div class="media-item${sel ? ' selected' : ''}" data-section="${this.key}" data-index="${i}">
-          ${item.poster ? `<img src="${item.poster}" alt="${item.title||''}" loading="lazy">` : `<div class="no-poster"><ha-icon icon="mdi:image-off"></ha-icon></div>`}
-          <div class="media-item-overlay"><div class="media-item-title">${item.title||''}</div></div>
-          <div class="req-badge ${sc}">${sl}</div>
-          <div class="media-type-badge">${item.mediaType === 'tv' ? 'TV' : 'Film'}</div>
-        </div>`;
-    }).join('');
-
-    list.querySelectorAll('.media-item').forEach(el => {
-      el.onclick = () => {
-        const idx = parseInt(el.dataset.index);
-        card._selectedSection = this.key;
-        card._selectedIndex   = idx;
-        this.showDetail(card, this._items[idx]);
-        list.querySelectorAll('.media-item').forEach(i => {
-          i.classList.toggle('selected', parseInt(i.dataset.index) === idx);
-        });
-      };
-    });
-  }
-
-  showDetail(card, item) {
-    if (!item) return;
-    if (item.backdrop || item.poster) card._setBackground(item.backdrop || item.poster);
-
-    const typeLabel  = item.mediaType === 'tv' ? 'Série TV' : 'Film';
-    const statusMap  = { 1:['b-pending','En attente'], 2:['b-approved','Approuvé'], 3:['b-declined','Refusé'] };
-    const [sc, st]   = statusMap[item.status] || ['b-unknown','Inconnu'];
-    const msMap      = { 2:'b-pending', 3:'b-processing', 4:'b-partial', 5:'b-available' };
-    const msLabel    = { 2:'En attente', 3:'Traitement', 4:'Partiel', 5:'Disponible' };
-
-    let actions = '';
-    if (item.status === 1) {
-      actions += `<button class="btn btn-success" data-action="approve-request" data-request-id="${item.requestId}"><ha-icon icon="mdi:check"></ha-icon> Approuver</button>`;
-      actions += `<button class="btn btn-danger"  data-action="decline-request" data-request-id="${item.requestId}"><ha-icon icon="mdi:close"></ha-icon> Refuser</button>`;
-    }
-    actions += `<button class="btn btn-outline" data-action="delete-request" data-request-id="${item.requestId}"><ha-icon icon="mdi:delete"></ha-icon> Supprimer</button>`;
-
-    card._detailContent.innerHTML = `
-      <div class="detail-header">
-        <div class="detail-title">${item.title||''}</div>
-        <div class="detail-meta">
-          <span class="detail-type">${typeLabel}</span>
-          <span class="badge ${sc}">${st}</span>
-          ${msMap[item.mediaStatus] ? `<span class="badge ${msMap[item.mediaStatus]}">${msLabel[item.mediaStatus]}</span>` : ''}
-          ${item.is4k ? '<span class="badge b-4k">4K</span>' : ''}
-        </div>
-      </div>
-      <div class="detail-request-info">
-        <div class="request-meta"><ha-icon icon="mdi:account"></ha-icon><span>${item.requestedBy}</span></div>
-        <div class="request-meta"><ha-icon icon="mdi:calendar"></ha-icon><span>${this.formatDate(item.requestedAt)}</span></div>
-      </div>
-      <div class="detail-actions">${actions}</div>`;
-  }
-}
-
-// ─── SIMPLE SECTIONS (Trending, Discover, Watchlist) ─────────────────────────
-
-class SeerTrendingSection extends SeerBaseSection {
-  constructor() { super('trending', 'Tendances', 'mdi:fire'); }
-  async load(card) {
-    try {
-      const data  = await card._api.getTrending();
-      const items = (data.results||[]).slice(0, card.config.max_items||20).map(r => card._api.normalizeResult(r));
-      this.renderItems(card, items);
-    } catch(e) { console.error('Seer trending:', e); }
-  }
-}
-
-class SeerDiscoverMoviesSection extends SeerBaseSection {
-  constructor() { super('discover_movies', 'Films Populaires', 'mdi:movie-open'); }
-  async load(card) {
-    try {
-      const data  = await card._api.getPopularMovies();
-      const items = (data.results||[]).slice(0, card.config.max_items||20).map(r => card._api.normalizeResult(r));
-      this.renderItems(card, items);
-    } catch(e) { console.error('Seer popular movies:', e); }
-  }
-}
-
-class SeerDiscoverTvSection extends SeerBaseSection {
-  constructor() { super('discover_tv', 'Séries Populaires', 'mdi:television-classic'); }
-  async load(card) {
-    try {
-      const data  = await card._api.getPopularTV();
-      const items = (data.results||[]).slice(0, card.config.max_items||20).map(r => card._api.normalizeResult(r));
-      this.renderItems(card, items);
-    } catch(e) { console.error('Seer popular tv:', e); }
-  }
-}
-
-class SeerUpcomingSection extends SeerBaseSection {
-  constructor() { super('upcoming', 'Films à venir', 'mdi:calendar-star'); }
-  async load(card) {
-    try {
-      const data  = await card._api.getUpcoming();
-      const items = (data.results||[]).slice(0, card.config.max_items||20).map(r => card._api.normalizeResult(r));
-      this.renderItems(card, items);
-    } catch(e) { console.error('Seer upcoming:', e); }
-  }
-}
-
-class SeerWatchlistSection extends SeerBaseSection {
-  constructor() { super('watchlist', 'Ma Watchlist', 'mdi:bookmark-multiple'); }
-  async load(card) {
-    try {
-      const data  = await card._api.getWatchlist();
-      const items = (data.results||[]).slice(0, card.config.max_items||20).map(r => card._api.normalizeResult(r));
-      this.renderItems(card, items);
-    } catch(e) { console.error('Seer watchlist:', e); }
   }
 }
 
 // ─── MAIN CARD ────────────────────────────────────────────────────────────────
 
+const TABS = [
+  { key:'trending',       icon:'mdi:fire',                label:'Tendances'  },
+  { key:'discover_movies',icon:'mdi:movie-open',          label:'Films'      },
+  { key:'discover_tv',    icon:'mdi:television-play',     label:'Séries'     },
+  { key:'upcoming',       icon:'mdi:calendar-star',       label:'À venir'    },
+  { key:'requests',       icon:'mdi:clipboard-list',      label:'Requêtes'   },
+  { key:'watchlist',      icon:'mdi:bookmark-multiple',   label:'Watchlist'  },
+  { key:'search',         icon:'mdi:magnify',             label:'Recherche'  },
+];
+
 class SeerCard extends HTMLElement {
   constructor() {
     super();
-    this._api       = null;
-    this._initialized = false;
-    this._selectedSection = null;
-    this._selectedIndex   = 0;
-    this._collapsed = new Set();
-    this._timer     = null;
+    this._api  = null;
+    this._init = false;
+    this._tab  = null;          // active tab key
+    this._data = {};            // cache: tab key → items[]
+    this._reqFilter = 'all';
+    this._searchQ   = '';
+    this._searchTimer = null;
   }
 
   setConfig(config) {
     this.config = Object.assign({
-      max_items: 20,
+      max_items: 40,
       refresh_interval: 300,
-      opacity: 0.8,
-      blur_radius: 0,
-      sections: ['search','requests','trending','discover_movies','discover_tv','upcoming','watchlist'],
     }, config);
-
-    this._allSections = {
-      search:         new SeerSearchSection(),
-      requests:       new SeerRequestsSection(),
-      trending:       new SeerTrendingSection(),
-      discover_movies:new SeerDiscoverMoviesSection(),
-      discover_tv:    new SeerDiscoverTvSection(),
-      upcoming:       new SeerUpcomingSection(),
-      watchlist:      new SeerWatchlistSection(),
-    };
+    this._tabs = TABS.filter(t =>
+      !config.sections || config.sections.includes(t.key)
+    );
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._api) {
-      this._api = new SeerApi(hass);
-    } else {
-      this._api.updateHass(hass);
-    }
-    if (!this._initialized) this._init();
+    if (!this._api) this._api = new SeerApi(hass);
+    else this._api.updateHass(hass);
+    if (!this._init) this._build();
   }
 
-  _init() {
-    this._initialized = true;
+  // ── Build initial HTML ────────────────────────────────────────────────────
 
-    const sectionsHtml = this.config.sections
-      .filter(k => this._allSections[k])
-      .map(k => this._allSections[k].generateTemplate(this.config))
-      .join('');
+  _build() {
+    this._init = true;
+
+    const tabsHtml = this._tabs.map(t => `
+      <button class="seer-tab" data-tab="${t.key}">
+        <ha-icon icon="${t.icon}"></ha-icon>
+        <span>${t.label}</span>
+      </button>`).join('');
 
     this.innerHTML = `
       <ha-card>
-        <div class="seer-card">
-          <div class="card-bg"></div>
-          <div class="detail-panel">
-            <div class="detail-bg"></div>
-            <div class="detail-content"></div>
+        <div class="seer-tabs">${tabsHtml}</div>
+        <div class="seer-search-bar" style="display:none">
+          <div class="seer-search-wrap">
+            <ha-icon icon="mdi:magnify"></ha-icon>
+            <input class="seer-search-input" type="text" placeholder="Rechercher un film ou une série…" autocomplete="off">
+            <button class="seer-search-clear" style="display:none"><ha-icon icon="mdi:close"></ha-icon></button>
           </div>
-          <div class="sections-container">${sectionsHtml}</div>
+        </div>
+        <div class="seer-content">
+          <div class="seer-grid" data-grid></div>
         </div>
       </ha-card>
       <style>${SEER_STYLES}</style>`;
 
-    this._cardBg       = this.querySelector('.card-bg');
-    this._detailBg     = this.querySelector('.detail-bg');
-    this._detailContent= this.querySelector('.detail-content');
+    this._el = {
+      tabs:    this.querySelector('.seer-tabs'),
+      searchBar: this.querySelector('.seer-search-bar'),
+      searchInput: this.querySelector('.seer-search-input'),
+      searchClear: this.querySelector('.seer-search-clear'),
+      content: this.querySelector('.seer-content'),
+      grid:    this.querySelector('[data-grid]'),
+    };
 
-    this._bindEvents();
-    this._loadAll();
+    this._bindTabs();
+    this._bindSearch();
 
-    if (this.config.refresh_interval > 0) {
-      this._timer = setInterval(() => { this._api.clearCache(); this._loadAll(); }, this.config.refresh_interval * 1000);
+    // Load first tab
+    const first = this._tabs[0];
+    if (first) this._activateTab(first.key);
+
+    // Auto-refresh
+    if ((this.config.refresh_interval||0) > 0) {
+      this._refreshTimer = setInterval(() => {
+        this._api.clearCache();
+        this._data = {};
+        if (this._tab && this._tab !== 'search') this._loadTab(this._tab);
+      }, this.config.refresh_interval * 1000);
     }
   }
 
-  _bindEvents() {
-    // Section collapse
-    this.querySelectorAll('.section-header').forEach(h => {
-      h.onclick = (e) => {
-        if (e.target.closest('.filter-chips')) return;
-        const sec = h.closest('[data-section]');
-        if (!sec) return;
-        const k = sec.dataset.section;
-        const c = sec.querySelector('.section-content');
-        const i = sec.querySelector('.section-toggle-icon');
-        if (this._collapsed.has(k)) { this._collapsed.delete(k); c.classList.remove('collapsed'); i.style.transform = ''; }
-        else                        { this._collapsed.add(k);    c.classList.add('collapsed');    i.style.transform = 'rotate(-90deg)'; }
+  // ── Tabs ─────────────────────────────────────────────────────────────────
+
+  _bindTabs() {
+    this.querySelector('.seer-tabs').addEventListener('click', e => {
+      const btn = e.target.closest('.seer-tab');
+      if (!btn) return;
+      this._activateTab(btn.dataset.tab);
+    });
+  }
+
+  _activateTab(key) {
+    this._tab = key;
+
+    // Update visual state
+    this.querySelectorAll('.seer-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === key);
+    });
+
+    // Toggle search bar
+    const isSearch = key === 'search';
+    this._el.searchBar.style.display = isSearch ? '' : 'none';
+
+    if (isSearch) {
+      this._el.searchInput.focus();
+      // Show previous search results or empty state
+      if (!this._searchQ) {
+        this._el.grid.innerHTML = `
+          <div class="seer-empty" style="grid-column:1/-1">
+            <ha-icon icon="mdi:magnify"></ha-icon>
+            <p>Tapez pour rechercher</p>
+          </div>`;
+      }
+      return;
+    }
+
+    // Use cache if available
+    if (this._data[key]) {
+      const filter = key === 'requests' ? this._reqFilter : null;
+      this._renderGrid(this._data[key], key);
+    } else {
+      this._loadTab(key);
+    }
+  }
+
+  // ── Data loading ─────────────────────────────────────────────────────────
+
+  async _loadTab(key, showSkeleton = true) {
+    if (showSkeleton) this._showSkeleton();
+    try {
+      let items = [];
+      const max = this.config.max_items || 40;
+
+      if (key === 'trending') {
+        const d = await this._api.getTrending();
+        items = (d.results||[]).slice(0,max).map(r => this._api.normalizeMedia(r));
+      } else if (key === 'discover_movies') {
+        const d = await this._api.getMovies();
+        items = (d.results||[]).slice(0,max).map(r => this._api.normalizeMedia(r));
+      } else if (key === 'discover_tv') {
+        const d = await this._api.getTV();
+        items = (d.results||[]).slice(0,max).map(r => this._api.normalizeMedia(r));
+      } else if (key === 'upcoming') {
+        const d = await this._api.getUpcoming();
+        items = (d.results||[]).slice(0,max).map(r => this._api.normalizeMedia(r));
+      } else if (key === 'watchlist') {
+        const d = await this._api.getWatchlist();
+        items = (d.results||[]).slice(0,max).map(r => this._api.normalizeMedia(r));
+      } else if (key === 'requests') {
+        const d = await this._api.getRequests(this._reqFilter);
+        items = (d.results||[]).slice(0,max).map(r => this._api.normalizeRequest(r));
+      }
+
+      if (key !== 'requests') this._data[key] = items; // cache non-request sections
+      this._renderGrid(items, key);
+    } catch(err) {
+      const msg = err && err.code === 'not_configured'
+        ? 'Configurez l\'intégration Seer dans Paramètres → Intégrations'
+        : 'Erreur de chargement';
+      this._el.grid.innerHTML = `
+        <div class="seer-empty" style="grid-column:1/-1">
+          <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
+          <p>${msg}</p>
+        </div>`;
+    }
+  }
+
+  // ── Grid rendering ────────────────────────────────────────────────────────
+
+  _showSkeleton() {
+    this._el.grid.innerHTML = Array(12).fill('<div class="skeleton"></div>').join('');
+  }
+
+  _renderGrid(items, sectionKey) {
+    if (!items || !items.length) {
+      this._el.grid.innerHTML = `
+        <div class="seer-empty" style="grid-column:1/-1">
+          <ha-icon icon="mdi:filmstrip-off"></ha-icon>
+          <p>Aucun contenu</p>
+        </div>`;
+      return;
+    }
+
+    // Requests section: add filter bar at top
+    let filterHtml = '';
+    if (sectionKey === 'requests') {
+      const filters = [
+        {k:'all',label:'Tout'},
+        {k:'pending',label:'En attente'},
+        {k:'approved',label:'Approuvé'},
+        {k:'available',label:'Disponible'},
+      ];
+      filterHtml = `<div class="req-filters" style="grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;padding-bottom:4px;">
+        ${filters.map(f => `<button class="req-chip${f.k===this._reqFilter?' chip-active':''}" data-filter="${f.k}"
+          style="background:${f.k===this._reqFilter?'var(--primary-color,#6366f1)':'rgba(255,255,255,.08)'};
+          color:${f.k===this._reqFilter?'white':'var(--secondary-text-color)'};
+          border:none;border-radius:14px;padding:4px 10px;font-size:.72em;cursor:pointer;font-family:inherit;font-weight:500"
+        >${f.label}</button>`).join('')}
+      </div>`;
+    }
+
+    this._el.grid.innerHTML = filterHtml + items.map((item, i) => this._posterHtml(item, i, sectionKey)).join('');
+
+    // Filter click handlers (requests only)
+    this._el.grid.querySelectorAll('.req-chip').forEach(btn => {
+      btn.onclick = () => {
+        this._reqFilter = btn.dataset.filter;
+        this._loadTab('requests', false);
       };
     });
 
-    // Search
-    this._allSections.search && this._allSections.search.setupHandlers(this);
-
-    // Action buttons
-    this.addEventListener('click', async (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (btn) await this._handleAction(btn.dataset.action, btn);
+    // Poster click handlers
+    this._el.grid.querySelectorAll('.poster-item').forEach(el => {
+      el.onclick = () => {
+        const idx = parseInt(el.dataset.idx);
+        this._openModal(items[idx], sectionKey);
+      };
     });
   }
 
-  async _handleAction(action, btn) {
-    btn.disabled = true;
+  _posterHtml(item, idx, sectionKey) {
+    // Status indicator
+    let dot = '';
+    if (sectionKey === 'requests') {
+      const cls = { 1:'req-pending', 2:'req-approved', 3:'req-declined' }[item.reqStatus] || '';
+      const lbl = { 1:'?', 2:'✓', 3:'✗' }[item.reqStatus] || '?';
+      if (cls) dot = `<div class="poster-req ${cls}">${lbl}</div>`;
+    } else {
+      const ms = item.mediaStatus;
+      const rc = item.reqStatus;
+      let cls = '';
+      if (ms === 5) cls = 'dot-available';
+      else if (ms === 4) cls = 'dot-partial';
+      else if (ms === 3) cls = 'dot-processing';
+      else if (rc === 1 || rc === 2) cls = 'dot-pending';
+      if (cls) dot = `<div class="poster-dot ${cls}"></div>`;
+    }
+
+    const typeLabel = item.mediaType === 'tv' ? 'TV' : 'Film';
+    const imgHtml = item.poster
+      ? `<img src="${item.poster}" alt="${this._esc(item.title)}" loading="lazy">`
+      : `<div class="no-img"><ha-icon icon="mdi:image-off"></ha-icon><span>No image</span></div>`;
+
+    return `
+      <div class="poster-item" data-idx="${idx}">
+        ${imgHtml}
+        ${dot}
+        <div class="poster-type">${typeLabel}</div>
+        <div class="poster-overlay">
+          <div class="poster-title">${this._esc(item.title)}</div>
+          ${item.year ? `<div class="poster-year">${item.year}</div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  // ── Modal ─────────────────────────────────────────────────────────────────
+
+  _openModal(item, sectionKey) {
+    // Remove any existing modal
+    this._closeModal();
+
+    const isRequest = sectionKey === 'requests';
+
+    // Build badges
+    const badges = [];
+    if (item.mediaType) badges.push(`<span class="badge b-type">${item.mediaType === 'tv' ? 'Série TV' : 'Film'}</span>`);
+    if (item.year)      badges.push(`<span class="badge b-type">${item.year}</span>`);
+    if (item.rating)    badges.push(`<span class="badge b-rating"><ha-icon icon="mdi:star"></ha-icon>${item.rating}</span>`);
+    if (item.is4k)      badges.push(`<span class="badge b-4k">4K</span>`);
+
+    // Status badge
+    if (isRequest) {
+      const sm = { 1:['b-pending','En attente'], 2:['b-approved','Approuvé'], 3:['b-declined','Refusé'] };
+      const [c, l] = sm[item.reqStatus] || ['b-type','?'];
+      badges.push(`<span class="badge ${c}">${l}</span>`);
+    } else {
+      const msm = { 5:['b-available','Disponible'], 4:['b-partial','Partiel'], 3:['b-processing','En cours'], 2:['b-pending','En attente'] };
+      if (msm[item.mediaStatus]) badges.push(`<span class="badge ${msm[item.mediaStatus][0]}">${msm[item.mediaStatus][1]}</span>`);
+    }
+
+    // Requester info
+    let requesterHtml = '';
+    if (isRequest && item.requestedBy) {
+      const date = item.requestedAt ? new Date(item.requestedAt).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}) : '';
+      requesterHtml = `<div style="font-size:.8em;color:var(--secondary-text-color);margin-bottom:10px;display:flex;gap:6px;align-items:center;">
+        <ha-icon icon="mdi:account" style="--mdc-icon-size:15px;opacity:.6"></ha-icon>${item.requestedBy}
+        ${date ? `<span style="opacity:.5">·</span><ha-icon icon="mdi:calendar" style="--mdc-icon-size:15px;opacity:.6"></ha-icon>${date}` : ''}
+      </div>`;
+    }
+
+    // Action buttons
+    let actionsHtml = this._buildActions(item, sectionKey);
+
+    // Hero image: use backdrop if available, fallback to poster
+    const heroImg = item.backdrop || item.poster;
+    const heroHtml = heroImg
+      ? `<img class="modal-backdrop-img" src="${heroImg}" alt="">`
+      : `<div style="width:100%;height:100%;background:rgba(255,255,255,.04)"></div>`;
+
+    const posterHtml = item.poster
+      ? `<img class="modal-poster" src="${item.poster}" alt="${this._esc(item.title)}">`
+      : `<div class="modal-poster-placeholder"><ha-icon icon="mdi:image-off"></ha-icon></div>`;
+
+    const modal = document.createElement('div');
+    modal.className = 'seer-modal-overlay';
+    modal.innerHTML = `
+      <div class="seer-modal">
+        <button class="modal-close"><ha-icon icon="mdi:close"></ha-icon></button>
+        <div class="modal-hero">
+          ${heroHtml}
+          <div class="modal-hero-gradient"></div>
+        </div>
+        <div class="modal-header">
+          ${posterHtml}
+          <div class="modal-title-block">
+            <h2 class="modal-title">${this._esc(item.title)}</h2>
+            <div class="modal-meta">${badges.join('')}</div>
+          </div>
+        </div>
+        <div class="modal-body">
+          ${requesterHtml}
+          ${item.overview ? `<p class="modal-overview">${this._esc(item.overview)}</p>` : ''}
+          <div class="modal-actions">${actionsHtml}</div>
+        </div>
+      </div>`;
+
+    // Close handlers
+    modal.querySelector('.modal-close').onclick = () => this._closeModal();
+    modal.onclick = e => { if (e.target === modal) this._closeModal(); };
+
+    // Keyboard close
+    this._escHandler = e => { if (e.key === 'Escape') this._closeModal(); };
+    document.addEventListener('keydown', this._escHandler);
+
+    // Action buttons
+    modal.querySelectorAll('[data-action]').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        await this._handleAction(btn.dataset.action, btn, item, sectionKey, modal);
+      };
+    });
+
+    document.body.appendChild(modal);
+    this._currentModal = modal;
+  }
+
+  _closeModal() {
+    if (this._currentModal) {
+      this._currentModal.remove();
+      this._currentModal = null;
+    }
+    if (this._escHandler) {
+      document.removeEventListener('keydown', this._escHandler);
+      this._escHandler = null;
+    }
+  }
+
+  _buildActions(item, sectionKey) {
+    const isRequest = sectionKey === 'requests';
+    let html = '';
+
+    if (isRequest) {
+      if (item.reqStatus === 1) {
+        html += `<button class="btn btn-success" data-action="approve"><ha-icon icon="mdi:check"></ha-icon> Approuver</button>`;
+        html += `<button class="btn btn-danger"  data-action="decline"><ha-icon icon="mdi:close"></ha-icon> Refuser</button>`;
+      }
+      html += `<button class="btn btn-ghost" data-action="delete"><ha-icon icon="mdi:delete-outline"></ha-icon> Supprimer</button>`;
+    } else {
+      if (item.mediaStatus === 5) {
+        html = `<button class="btn btn-ghost" disabled><ha-icon icon="mdi:check-circle"></ha-icon> Disponible</button>`;
+      } else if (item.reqStatus === 1 || item.reqStatus === 2) {
+        const l = item.reqStatus === 1 ? 'En attente' : 'Approuvé';
+        html = `<button class="btn btn-ghost" disabled><ha-icon icon="mdi:clock-outline"></ha-icon> ${l}</button>`;
+      } else if (item.tmdbId) {
+        const mt = item.mediaType || 'movie';
+        html = `<button class="btn btn-primary" data-action="request" data-tmdb="${item.tmdbId}" data-type="${mt}" data-title="${this._esc(item.title)}"><ha-icon icon="mdi:plus"></ha-icon> Demander</button>`;
+      }
+    }
+    return html;
+  }
+
+  // ── Action handler ────────────────────────────────────────────────────────
+
+  async _handleAction(action, btn, item, sectionKey, modal) {
     const orig = btn.innerHTML;
-    btn.innerHTML = '<ha-icon icon="mdi:loading" class="spin"></ha-icon>';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"><ha-icon icon="mdi:loading"></ha-icon></span>';
+
     try {
       if (action === 'request') {
-        const id   = parseInt(btn.dataset.tmdbId);
-        const type = btn.dataset.mediaType;
-        const name = btn.dataset.title;
+        const tmdbId = parseInt(btn.dataset.tmdb);
+        const type   = btn.dataset.type;
+        const title  = btn.dataset.title;
+
         if (type === 'tv') {
-          const season = await this._seasonPicker(name);
+          const season = await this._seasonPicker(title);
           if (season === null) { btn.disabled = false; btn.innerHTML = orig; return; }
-          await this._api.createTvRequest(id, { seasons: season });
+          await this._api.reqTV(tmdbId, season);
         } else {
-          await this._api.createMovieRequest(id);
+          await this._api.reqMovie(tmdbId);
         }
-        btn.innerHTML = '<ha-icon icon="mdi:check"></ha-icon> Demandé'; btn.classList.add('btn-success');
-        this._api.clearCache(); this._allSections.requests && this._allSections.requests.load(this);
-      } else if (action === 'approve-request') {
-        await this._api.approveRequest(parseInt(btn.dataset.requestId));
-        btn.innerHTML = '<ha-icon icon="mdi:check"></ha-icon> Approuvé'; btn.classList.add('btn-success');
-        this._api.clearCache(); this._allSections.requests && this._allSections.requests.load(this);
-      } else if (action === 'decline-request') {
-        await this._api.declineRequest(parseInt(btn.dataset.requestId));
-        btn.innerHTML = '<ha-icon icon="mdi:close"></ha-icon> Refusé'; btn.classList.add('btn-danger');
-        this._api.clearCache(); this._allSections.requests && this._allSections.requests.load(this);
-      } else if (action === 'delete-request') {
-        if (await this._confirm('Supprimer cette requête ?')) {
-          await this._api.deleteRequest(parseInt(btn.dataset.requestId));
-          btn.innerHTML = '<ha-icon icon="mdi:check"></ha-icon> Supprimé';
-          this._api.clearCache(); this._allSections.requests && this._allSections.requests.load(this);
-        } else { btn.disabled = false; btn.innerHTML = orig; }
+        btn.innerHTML = '<ha-icon icon="mdi:check"></ha-icon> Demandé';
+        btn.classList.remove('btn-primary'); btn.classList.add('btn-success');
+        this._api.clearCache();
+        this._data = {};
+
+      } else if (action === 'approve') {
+        await this._api.approve(item.requestId);
+        btn.innerHTML = '<ha-icon icon="mdi:check"></ha-icon> Approuvé';
+        btn.classList.remove('btn-success'); btn.classList.add('btn-ghost');
+        btn.disabled = true;
+        this._api.clearCache();
+        setTimeout(() => { this._closeModal(); this._loadTab('requests', false); }, 800);
+
+      } else if (action === 'decline') {
+        await this._api.decline(item.requestId);
+        btn.innerHTML = '<ha-icon icon="mdi:close"></ha-icon> Refusé';
+        btn.classList.remove('btn-danger'); btn.classList.add('btn-ghost');
+        btn.disabled = true;
+        this._api.clearCache();
+        setTimeout(() => { this._closeModal(); this._loadTab('requests', false); }, 800);
+
+      } else if (action === 'delete') {
+        const ok = await this._confirm('Supprimer cette requête ?', 'Cette action est irréversible.');
+        if (!ok) { btn.disabled = false; btn.innerHTML = orig; return; }
+        await this._api.remove(item.requestId);
+        this._api.clearCache();
+        this._closeModal();
+        this._loadTab('requests', false);
       }
     } catch(err) {
       console.error('Seer Card:', err);
-      btn.innerHTML = '<ha-icon icon="mdi:alert"></ha-icon> Erreur'; btn.classList.add('btn-danger');
-      setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; btn.classList.remove('btn-danger'); }, 3000);
+      btn.innerHTML = '<ha-icon icon="mdi:alert"></ha-icon> Erreur';
+      setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 3000);
     }
   }
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  _bindSearch() {
+    const input = this._el.searchInput;
+    const clear = this._el.searchClear;
+
+    input.oninput = () => {
+      this._searchQ = input.value;
+      clear.style.display = this._searchQ ? '' : 'none';
+      clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(() => this._doSearch(), 400);
+    };
+    input.onkeydown = e => { if (e.key === 'Enter') { clearTimeout(this._searchTimer); this._doSearch(); } };
+    clear.onclick = () => {
+      input.value = ''; this._searchQ = ''; clear.style.display = 'none';
+      this._el.grid.innerHTML = `
+        <div class="seer-empty" style="grid-column:1/-1">
+          <ha-icon icon="mdi:magnify"></ha-icon>
+          <p>Tapez pour rechercher</p>
+        </div>`;
+    };
+  }
+
+  async _doSearch() {
+    if (!this._searchQ.trim()) return;
+    this._showSkeleton();
+    try {
+      const max  = this.config.max_items || 40;
+      const d    = await this._api.search(this._searchQ);
+      const items = (d.results||[])
+        .filter(r => r.mediaType === 'movie' || r.mediaType === 'tv')
+        .slice(0, max)
+        .map(r => this._api.normalizeMedia(r));
+      if (!items.length) {
+        this._el.grid.innerHTML = `<div class="seer-empty" style="grid-column:1/-1"><ha-icon icon="mdi:movie-search-outline"></ha-icon><p>Aucun résultat pour « ${this._esc(this._searchQ)} »</p></div>`;
+      } else {
+        this._renderGrid(items, 'search');
+      }
+    } catch(e) {
+      this._el.grid.innerHTML = `<div class="seer-empty" style="grid-column:1/-1"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><p>Erreur de recherche</p></div>`;
+    }
+  }
+
+  // ── Dialogs ───────────────────────────────────────────────────────────────
 
   _seasonPicker(title) {
     return new Promise(resolve => {
-      const modal = document.createElement('div');
-      modal.className = 'seer-modal-overlay';
-      modal.innerHTML = `
-        <div class="seer-modal">
-          <div class="seer-modal-header"><span>Choisir les saisons</span><button class="seer-modal-close"><ha-icon icon="mdi:close"></ha-icon></button></div>
-          <div class="seer-modal-body">
-            <p>Quelles saisons pour <strong>${title}</strong> ?</p>
-            <div class="season-options">
-              <button class="btn btn-primary season-btn" data-season="all">Toutes les saisons</button>
-              <button class="btn btn-secondary season-btn" data-season="latest">Dernière saison</button>
-              <button class="btn btn-secondary season-btn" data-season="first">Première saison</button>
+      const m = document.createElement('div');
+      m.className = 'seer-mini-overlay';
+      m.innerHTML = `
+        <div class="seer-mini-modal">
+          <div class="mini-header">
+            Choisir les saisons
+            <button class="mini-close"><ha-icon icon="mdi:close"></ha-icon></button>
+          </div>
+          <div class="mini-body">
+            <p>Pour <strong>${this._esc(title)}</strong>, demander :</p>
+            <div class="mini-options">
+              <button class="btn btn-primary" data-s="all">Toutes les saisons</button>
+              <button class="btn btn-ghost"   data-s="latest">Dernière saison uniquement</button>
+              <button class="btn btn-ghost"   data-s="first">Première saison uniquement</button>
             </div>
           </div>
         </div>`;
-      const close = () => { modal.remove(); resolve(null); };
-      modal.querySelector('.seer-modal-close').onclick = close;
-      modal.onclick = e => { if (e.target === modal) close(); };
-      modal.querySelectorAll('.season-btn').forEach(b => { b.onclick = () => { modal.remove(); resolve(b.dataset.season); }; });
-      this.appendChild(modal);
+      const close = v => { m.remove(); resolve(v); };
+      m.querySelector('.mini-close').onclick = () => close(null);
+      m.onclick = e => { if (e.target === m) close(null); };
+      m.querySelectorAll('[data-s]').forEach(b => b.onclick = () => close(b.dataset.s));
+      document.body.appendChild(m);
     });
   }
 
-  _confirm(msg) {
+  _confirm(title, desc) {
     return new Promise(resolve => {
-      const modal = document.createElement('div');
-      modal.className = 'seer-modal-overlay';
-      modal.innerHTML = `
-        <div class="seer-modal">
-          <div class="seer-modal-body">
-            <p>${msg}</p>
-            <div class="modal-actions">
-              <button class="btn btn-danger" data-y>Confirmer</button>
-              <button class="btn btn-outline" data-n>Annuler</button>
+      const m = document.createElement('div');
+      m.className = 'seer-mini-overlay';
+      m.innerHTML = `
+        <div class="seer-mini-modal">
+          <div class="mini-header">
+            ${this._esc(title)}
+            <button class="mini-close"><ha-icon icon="mdi:close"></ha-icon></button>
+          </div>
+          <div class="mini-body">
+            ${desc ? `<p>${this._esc(desc)}</p>` : ''}
+            <div class="mini-actions">
+              <button class="btn btn-danger"  data-ok>Confirmer</button>
+              <button class="btn btn-ghost"   data-no>Annuler</button>
             </div>
           </div>
         </div>`;
-      modal.querySelector('[data-y]').onclick = () => { modal.remove(); resolve(true); };
-      modal.querySelector('[data-n]').onclick = () => { modal.remove(); resolve(false); };
-      modal.onclick = e => { if (e.target === modal) { modal.remove(); resolve(false); } };
-      this.appendChild(modal);
+      const close = v => { m.remove(); resolve(v); };
+      m.querySelector('.mini-close').onclick = () => close(false);
+      m.querySelector('[data-ok]').onclick   = () => close(true);
+      m.querySelector('[data-no]').onclick   = () => close(false);
+      m.onclick = e => { if (e.target === m) close(false); };
+      document.body.appendChild(m);
     });
   }
 
-  async _loadAll() {
-    const loads = this.config.sections
-      .filter(k => this._allSections[k] && k !== 'search')
-      .map(k => this._allSections[k].load(this));
-    await Promise.allSettled(loads);
-  }
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
-  _setBackground(url) {
-    if (!url) return;
-    if (this._cardBg) this._cardBg.style.backgroundImage = `url('${url}')`;
-    if (this._detailBg) {
-      this._detailBg.style.backgroundImage = `url('${url}')`;
-      this._detailBg.style.opacity = this.config.opacity || 0.8;
-      this._detailBg.style.filter  = `blur(${this.config.blur_radius||0}px) brightness(0.4)`;
-    }
-  }
+  _esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   disconnectedCallback() {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._refreshTimer) clearInterval(this._refreshTimer);
+    this._closeModal();
   }
 
-  getCardSize() { return 6; }
+  getCardSize() { return 8; }
 
   static getStubConfig() {
-    return {
-      max_items: 20,
-      refresh_interval: 300,
-      opacity: 0.8,
-      sections: ['search','requests','trending','discover_movies','discover_tv','upcoming','watchlist'],
-    };
+    return { max_items: 40, refresh_interval: 300 };
   }
 }
+
+// ─── REGISTER ────────────────────────────────────────────────────────────────
 
 customElements.define('seer-card', SeerCard);
 
@@ -956,6 +1041,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'seer-card',
   name: 'Seer Card',
-  description: 'Carte média complète propulsée par Seer — requêtes, découverte, watchlist et recherche.',
+  description: 'Carte média propulsée par Seer — tendances, découverte, requêtes, watchlist et recherche.',
   preview: true,
 });
