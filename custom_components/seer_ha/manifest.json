@@ -1,7 +1,7 @@
 {
   "domain": "seer_ha",
   "name": "Seer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "config_flow": true,
   "documentation": "https://github.com/k69sknk/seer-card-ha",
   "issue_tracker": "https://github.com/k69sknk/seer-card-ha/issues",
