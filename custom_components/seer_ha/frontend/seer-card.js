@@ -520,6 +520,14 @@ class SeerCard extends HTMLElement {
         <span>${t.label}</span>
       </button>`).join('');
 
+    // Inject global styles (modal, badges, buttons) into document.head once
+    if (!document.getElementById('seer-card-global-styles')) {
+      const globalStyle = document.createElement('style');
+      globalStyle.id = 'seer-card-global-styles';
+      globalStyle.textContent = SEER_STYLES;
+      document.head.appendChild(globalStyle);
+    }
+
     this.innerHTML = `
       <ha-card>
         <div class="seer-tabs">${tabsHtml}</div>
@@ -533,8 +541,7 @@ class SeerCard extends HTMLElement {
         <div class="seer-content">
           <div class="seer-grid" data-grid></div>
         </div>
-      </ha-card>
-      <style>${SEER_STYLES}</style>`;
+      </ha-card>`;
 
     this._el = {
       tabs:    this.querySelector('.seer-tabs'),
