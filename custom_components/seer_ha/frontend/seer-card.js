@@ -7,7 +7,8 @@
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 
-const SEER_STYLES = `
+// Styles injectés localement dans la carte (scoped)
+const SEER_CARD_STYLES = `
   ha-card {
     overflow: hidden;
     padding: 0;
@@ -198,7 +199,10 @@ const SEER_STYLES = `
   }
   .seer-empty ha-icon { --mdc-icon-size: 40px; }
   .seer-empty p { margin: 0; font-size: .9em; text-align: center; }
+`;
 
+// Styles injectés une seule fois dans document.head (global — pour modal + badges + boutons)
+const SEER_GLOBAL_STYLES = `
   /* ── Modal overlay ── */
   .seer-modal-overlay {
     position: fixed; inset: 0;
@@ -419,8 +423,9 @@ class SeerApi {
     return this._req('/request?' + q.toString());
   }
 
+  getTVDetails(tmdbId) { return this._req('/tv/'+tmdbId); }
   reqMovie(id, is4k) { return this._req('/request', { method:'POST', body: JSON.stringify({ mediaType:'movie', mediaId:id, is4k:!!is4k }) }); }
-  reqTV(id, seasons, is4k) { return this._req('/request', { method:'POST', body: JSON.stringify({ mediaType:'tv', mediaId:id, seasons:seasons||'all', is4k:!!is4k }) }); }
+  reqTV(id, seasons, is4k) { return this._req('/request', { method:'POST', body: JSON.stringify({ mediaType:'tv', mediaId:id, seasons, is4k:!!is4k }) }); }
   approve(id) { return this._req('/request/'+id+'/approve', { method:'POST' }); }
   decline(id) { return this._req('/request/'+id+'/decline', { method:'POST' }); }
   remove(id)  { return this._req('/request/'+id, { method:'DELETE' }); }
@@ -524,7 +529,7 @@ class SeerCard extends HTMLElement {
     if (!document.getElementById('seer-card-global-styles')) {
       const globalStyle = document.createElement('style');
       globalStyle.id = 'seer-card-global-styles';
-      globalStyle.textContent = SEER_STYLES;
+      globalStyle.textContent = SEER_GLOBAL_STYLES;
       document.head.appendChild(globalStyle);
     }
 
@@ -541,7 +546,8 @@ class SeerCard extends HTMLElement {
         <div class="seer-content">
           <div class="seer-grid" data-grid></div>
         </div>
-      </ha-card>`;
+      </ha-card>
+      <style>${SEER_CARD_STYLES}</style>`;
 
     this._el = {
       tabs:    this.querySelector('.seer-tabs'),
@@ -883,9 +889,9 @@ class SeerCard extends HTMLElement {
         const title  = btn.dataset.title;
 
         if (type === 'tv') {
-          const season = await this._seasonPicker(title);
-          if (season === null) { btn.disabled = false; btn.innerHTML = orig; return; }
-          await this._api.reqTV(tmdbId, season);
+          const seasons = await this._seasonPicker(title, tmdbId);
+          if (seasons === null) { btn.disabled = false; btn.innerHTML = orig; return; }
+          await this._api.reqTV(tmdbId, seasons);
         } else {
           await this._api.reqMovie(tmdbId);
         }
@@ -970,29 +976,46 @@ class SeerCard extends HTMLElement {
 
   // ── Dialogs ───────────────────────────────────────────────────────────────
 
-  _seasonPicker(title) {
+  async _seasonPicker(title, tmdbId) {
+    // Fetch real seasons from Seer
+    let seasons = [];
+    try {
+      const detail = await this._api.getTVDetails(tmdbId);
+      seasons = (detail.seasons || []).filter(s => s.seasonNumber > 0);
+    } catch(e) { /* fallback to empty */ }
+
     return new Promise(resolve => {
       const m = document.createElement('div');
       m.className = 'seer-mini-overlay';
+
+      const seasonButtons = seasons.length
+        ? seasons.map(s => `<button class="btn btn-ghost seer-season-btn" data-sn="${s.seasonNumber}">
+            Saison ${s.seasonNumber}${s.name && s.name !== 'Season '+s.seasonNumber ? ' — '+this._esc(s.name) : ''}
+          </button>`).join('')
+        : '';
+
       m.innerHTML = `
-        <div class="seer-mini-modal">
+        <div class="seer-mini-modal" style="max-width:380px">
           <div class="mini-header">
             Choisir les saisons
             <button class="mini-close"><ha-icon icon="mdi:close"></ha-icon></button>
           </div>
           <div class="mini-body">
-            <p>Pour <strong>${this._esc(title)}</strong>, demander :</p>
-            <div class="mini-options">
-              <button class="btn btn-primary" data-s="all">Toutes les saisons</button>
-              <button class="btn btn-ghost"   data-s="latest">Dernière saison uniquement</button>
-              <button class="btn btn-ghost"   data-s="first">Première saison uniquement</button>
+            <p>Pour <strong>${this._esc(title)}</strong> :</p>
+            <div class="mini-options" style="max-height:55vh;overflow-y:auto;gap:6px">
+              <button class="btn btn-primary seer-season-btn" data-sn="all">Toutes les saisons</button>
+              ${seasonButtons}
             </div>
           </div>
         </div>`;
+
       const close = v => { m.remove(); resolve(v); };
       m.querySelector('.mini-close').onclick = () => close(null);
       m.onclick = e => { if (e.target === m) close(null); };
-      m.querySelectorAll('[data-s]').forEach(b => b.onclick = () => close(b.dataset.s));
+      m.querySelectorAll('.seer-season-btn').forEach(b => b.onclick = () => {
+        const sn = b.dataset.sn;
+        close(sn === 'all' ? [0, ...seasons.map(s => s.seasonNumber)] : [parseInt(sn)]);
+      });
       document.body.appendChild(m);
     });
   }
